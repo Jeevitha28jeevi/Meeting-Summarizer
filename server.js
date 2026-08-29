@@ -49,6 +49,7 @@ const participantSchema = new mongoose.Schema(
       enum: ['pending', 'attending', 'absent', 'busy'],
       default: 'pending'
     },
+    absenceReason: { type: String, default: '' },
     respondedAt: Date
   },
   { _id: false }
@@ -172,6 +173,7 @@ function meetingDTO(meeting, usersById) {
   const participants = (plain.participants || []).map((participant) => ({
     user: userForParticipant(participant, usersById),
     status: participant.status || 'pending',
+    absenceReason: participant.absenceReason || participant.reason || '',
     respondedAt: dateIso(participant.respondedAt)
   }));
   return {
@@ -1124,22 +1126,29 @@ app.patch('/api/meetings/:id/participants/:userId/status', auth, async (req, res
 
     if (requestedStatus === 'attending') {
       const conflicts = await findConflicts(targetUserId, meeting.startAt, meeting.endAt, idOf(meeting));
-      if (conflicts.length) {
+      const activeAttendingConflicts = conflicts.filter((c) => {
+        const p = (c.participants || []).find((item) => getParticipantUserId(item) === targetUserId);
+        return p && p.status === 'attending';
+      });
+      if (activeAttendingConflicts.length) {
         const map = await usersMap();
         return res.status(409).json({
-          message: 'This employee is busy in another meeting during this time.',
-          conflicts: conflicts.map((item) => conflictDTO(item, map))
+          message: 'This employee is already attending another meeting during this time range. Please update your response on the other meeting first.',
+          conflicts: activeAttendingConflicts.map((item) => conflictDTO(item, map))
         });
       }
     }
 
+    const absenceReason = String(req.body.reason || req.body.absenceReason || '').trim();
     const updatedMeeting = await updateParticipantRaw(req.params.id, targetUserId, {
       status: requestedStatus,
+      absenceReason: requestedStatus === 'attending' ? '' : (absenceReason || participant.absenceReason || ''),
       respondedAt: new Date()
     });
     await logAudit(req.currentUser, `marked_${requestedStatus}`, 'meeting_participant', `${req.params.id}:${targetUserId}`, {
       meetingId: req.params.id,
-      employeeId: targetUserId
+      employeeId: targetUserId,
+      reason: absenceReason
     });
     res.json({ meeting: meetingDTO(updatedMeeting, await usersMap()) });
   } catch (error) {

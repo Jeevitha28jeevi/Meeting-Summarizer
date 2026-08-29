@@ -94,6 +94,19 @@ button { cursor: pointer; }
 .attendance-track { height: 8px; overflow: hidden; border-radius: 99px; background: #edf0f6; }
 .dark .attendance-track { background: #1c2940; }
 .attendance-fill { height: 100%; border-radius: 99px; background: linear-gradient(90deg, #5267e7, #13b89a); }
+.attendance-fill-high { background: linear-gradient(90deg, #10b981, #059669) !important; }
+.attendance-fill-med { background: linear-gradient(90deg, #f59e0b, #d97706) !important; }
+.attendance-fill-low { background: linear-gradient(90deg, #f43f5e, #e11d48) !important; }
+
+.attendance-badge-high { color: #047857; background: #ecfdf5; border: 1px solid #a7f3d0; padding: 3px 8px; border-radius: 8px; display: inline-block; }
+.dark .attendance-badge-high { color: #34d399; background: rgba(6, 78, 59, 0.45); border-color: #065f46; }
+
+.attendance-badge-med { color: #b45309; background: #fffbeb; border: 1px solid #fde68a; padding: 3px 8px; border-radius: 8px; display: inline-block; }
+.dark .attendance-badge-med { color: #fbbf24; background: rgba(120, 53, 15, 0.45); border-color: #92400e; }
+
+.attendance-badge-low { color: #be123c; background: #fff1f2; border: 1px solid #fecdd3; padding: 3px 8px; border-radius: 8px; display: inline-block; }
+.dark .attendance-badge-low { color: #fb7185; background: rgba(136, 19, 55, 0.45); border-color: #9f1239; }
+
 .attendance-value { color: #56637b; font-size: 11px; font-weight: 800; text-align: right; }
 .dark .attendance-value { color: #bdc9dd; }
 

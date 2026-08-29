@@ -328,7 +328,8 @@ function adminRequestCard(request) {
   const requestedLocal = formatDateTime(request.requestedStartAt, currentTimezone(), { dateStyle: 'medium', timeStyle: 'short' });
   const requestedUtc = formatUtc(request.requestedStartAt);
   const participants = (request.participants || []).map((user) => user.name).join(', ');
-  return `<article class="meeting-card"><div class="flex flex-col justify-between gap-4 lg:flex-row lg:items-start"><div class="min-w-0 flex-1"><div class="flex flex-wrap items-center gap-2">${statusPill('pending')}<span class="text-[10px] font-bold text-slate-400">Request #${escapeHtml(request.id.slice(0, 8))}</span></div><h3 class="meeting-title mt-2">${escapeHtml(request.title)}</h3><p class="meeting-description mt-1">${escapeHtml(request.agenda || 'No agenda provided.')}</p><div class="mt-3 meeting-meta"><span>Host (Requester): ${escapeHtml(request.requester?.name || 'Employee')}</span><span>◷ ${escapeHtml(requestedLocal)}</span><span>UTC ${escapeHtml(requestedUtc.replace(' UTC', ''))}</span><span>◎ ${escapeHtml(request.timezone)}</span></div><p class="mt-3 text-xs font-semibold text-slate-500 dark:text-slate-400"><b>Participants:</b> ${escapeHtml(participants || 'Requester')}</p>${request.roomPreference ? `<p class="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400"><b>Room preference:</b> ${escapeHtml(request.roomPreference)}</p>` : ''}</div><div class="w-full lg:max-w-xs"><label class="field-label">Assign meeting room<input class="input" data-request-room="${escapeHtml(request.id)}" value="${escapeHtml(request.roomPreference || '')}" placeholder="Boardroom A / Zoom" /></label><div class="mt-3 flex flex-wrap gap-2"><button class="primary-button" data-approve-request="${escapeHtml(request.id)}">Approve request</button><button class="attendance-button" data-reject-request="${escapeHtml(request.id)}">Reject</button></div></div></div></article>`;
+  return `<article class="meeting-card"><div class="flex flex-col justify-between gap-4 lg:flex-row lg:items-start"><div class="min-w-0 flex-1"><div class="flex flex-wrap items-center gap-2">${statusPill('pending')}<span class="text-[10px] font-bold text-slate-400">Request #${escapeHtml(request.id.slice(0, 8))}</span></div><h3 class="meeting-title mt-2">${escapeHtml(request.title)}</h3><p class="meeting-description mt-1">${escapeHtml(request.agenda || 'No agenda provided.')}</p><div class="mt-3 meeting-meta"><span>Host (Requester): ${escapeHtml(request.requester?.name || 'Employee')}</span><span>◷ ${escapeHtml(requestedLocal)}</span><span>UTC ${escapeHtml(requestedUtc.replace(' UTC', ''))}</span><span>◎ ${escapeHtml(request.timezone)}</span></div><p class="mt-3 text-xs font-semibold text-slate-500 dark:text-slate-400"><b>Participants:</b> ${escapeHtml(participants || 'Requester')}</p>${request.roomPreference ? `<p class="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400"><b>Room preference:</b> ${escapeHtml(request.roomPreference)}</p>` : ''}</div><div class="w-full lg:max-w-xs"><label class="field-label">Assign meeting room<input class="input" data-request-room="${escapeHtml(request.id)}" value="${escapeHtml(request.roomPreference || '')}" placeholder="Boardroom A / Zoom" /></label><label class="mt-2 flex items-center gap-2 text-[11px] font-bold text-slate-500 dark:text-slate-400"><input type="checkbox" data-request-allow-conflicts="${escapeHtml(request.id)}" class="accent-indigo-600" /> Allow conflict override</label><div class="mt-3 flex flex-wrap gap-2"><button class="primary-button" data-approve-request="${escapeHtml(request.id)}">Approve request</button><button class="attendance-button" data-reject-request="${escapeHtml(request.id)}">Reject</button></div></div></div></article>`;
+}
 }
 
 function employeeRequestRow(request) {
@@ -375,7 +376,12 @@ function renderAttendanceBars() {
     container.innerHTML = '<div class="empty-state">Attendance metrics will appear after employees are assigned to meetings.</div>';
     return;
   }
-  container.innerHTML = data.slice(0, 8).map((item) => `<div class="attendance-row"><span class="attendance-name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</span><span class="attendance-track"><span class="attendance-fill" style="width:${item.attendanceRate}%"></span></span><span class="attendance-value">${item.attendanceRate}%</span></div>`).join('');
+  container.innerHTML = data.slice(0, 8).map((item) => {
+    const rate = Number(item.attendanceRate || 0);
+    const fillClass = rate >= 80 ? 'attendance-fill-high' : rate >= 50 ? 'attendance-fill-med' : 'attendance-fill-low';
+    const textClass = rate >= 80 ? 'text-emerald-600 dark:text-emerald-400 font-black' : rate >= 50 ? 'text-amber-600 dark:text-amber-400 font-black' : 'text-rose-600 dark:text-rose-400 font-black';
+    return `<div class="attendance-row"><span class="attendance-name font-bold" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</span><span class="attendance-track"><span class="attendance-fill ${fillClass}" style="width:${rate}%"></span></span><span class="attendance-value ${textClass}">${rate}%</span></div>`;
+  }).join('');
 }
 
 function upcomingRow(meeting) {
@@ -467,10 +473,12 @@ function meetingCard(meeting) {
 
 function participantChip(meeting, participant, isAdmin) {
   const user = participant.user || {};
+  const reasonText = participant.absenceReason ? `Reason: ${participant.absenceReason}` : '';
+  const reasonBadge = participant.absenceReason ? `<span class="block text-[9px] font-semibold text-amber-600 dark:text-amber-400 italic" title="${escapeHtml(participant.absenceReason)}">"${escapeHtml(participant.absenceReason)}"</span>` : '';
   if (isAdmin) {
-    return `<div class="participant-chip"><span>${escapeHtml(user.name || 'Unknown')}</span><select class="mini-status rounded border-0 bg-transparent p-0 font-extrabold outline-none" data-meeting-id="${meeting.id}" data-participant-id="${user.id}" aria-label="Update participant status"><option value="pending" ${participant.status === 'pending' ? 'selected' : ''}>Pending</option><option value="attending" ${participant.status === 'attending' ? 'selected' : ''}>Attending</option><option value="absent" ${participant.status === 'absent' ? 'selected' : ''}>Absent</option><option value="busy" ${participant.status === 'busy' ? 'selected' : ''}>Lobby busy</option></select></div>`;
+    return `<div class="participant-chip" title="${escapeHtml(reasonText)}"><div><span>${escapeHtml(user.name || 'Unknown')}</span>${reasonBadge}</div><select class="mini-status rounded border-0 bg-transparent p-0 font-extrabold outline-none" data-meeting-id="${meeting.id}" data-participant-id="${user.id}" aria-label="Update participant status"><option value="pending" ${participant.status === 'pending' ? 'selected' : ''}>Pending</option><option value="attending" ${participant.status === 'attending' ? 'selected' : ''}>Attending</option><option value="absent" ${participant.status === 'absent' ? 'selected' : ''}>Absent</option><option value="busy" ${participant.status === 'busy' ? 'selected' : ''}>Lobby busy</option></select></div>`;
   }
-  return `<span class="participant-chip"><span>${escapeHtml(user.name || 'Participant')}</span><span class="mini-status status-${escapeHtml(participant.status)}">${escapeHtml(participant.status === 'busy' ? 'lobby busy' : participant.status)}</span></span>`;
+  return `<span class="participant-chip flex-col !items-start" title="${escapeHtml(reasonText)}"><div class="flex items-center gap-1.5"><span>${escapeHtml(user.name || 'Participant')}</span><span class="mini-status status-${escapeHtml(participant.status)}">${escapeHtml(participant.status === 'busy' ? 'lobby busy' : participant.status)}</span></div>${reasonBadge}</span>`;
 }
 
 function renderEmployees() {
@@ -485,9 +493,11 @@ function renderEmployees() {
   }
   body.innerHTML = employees.map((user) => {
     const stats = employeeStats.get(user.id) || { assigned: 0, attendanceRate: 0 };
+    const rate = Number(stats.attendanceRate || 0);
+    const badgeClass = rate >= 80 ? 'attendance-badge-high' : rate >= 50 ? 'attendance-badge-med' : 'attendance-badge-low';
     const assignedMeetings = state.meetings.filter((meeting) => meeting.participants.some((participant) => participant.user?.id === user.id));
     const meetingTitles = assignedMeetings.map((meeting) => meeting.title).join(' • ') || 'No meetings assigned';
-    return `<tr><td><div class="table-person"><span class="avatar">${initials(user.name)}</span><span><b class="block text-slate-700 dark:text-slate-100">${escapeHtml(user.name)}</b><small class="mt-0.5 block text-[10px] text-slate-400">${escapeHtml(user.email)}</small></span></div></td><td>${escapeHtml(user.department)}</td><td><span class="text-[11px]">${escapeHtml(user.timezone)}</span></td><td><span title="${escapeHtml(meetingTitles)}" class="font-extrabold">${assignedMeetings.length}</span><small class="mt-1 block max-w-[170px] truncate text-[10px] text-slate-400" title="${escapeHtml(meetingTitles)}">${escapeHtml(meetingTitles)}</small></td><td><span class="font-extrabold text-indigo-600 dark:text-indigo-300">${stats.attendanceRate}%</span></td><td><div class="flex items-center gap-2"><input class="rating-input" type="number" min="0" max="5" step="0.1" value="${Number(user.performanceRating || 0).toFixed(1)}" data-rating-id="${user.id}" aria-label="Performance rating for ${escapeHtml(user.name)}" /><button class="save-rating" data-save-rating="${user.id}">Save</button></div></td></tr>`;
+    return `<tr><td><div class="table-person"><span class="avatar">${initials(user.name)}</span><span><b class="block text-slate-700 dark:text-slate-100">${escapeHtml(user.name)}</b><small class="mt-0.5 block text-[10px] text-slate-400">${escapeHtml(user.email)}</small></span></div></td><td>${escapeHtml(user.department)}</td><td><span class="text-[11px]">${escapeHtml(user.timezone)}</span></td><td><span title="${escapeHtml(meetingTitles)}" class="font-extrabold">${assignedMeetings.length}</span><small class="mt-1 block max-w-[170px] truncate text-[10px] text-slate-400" title="${escapeHtml(meetingTitles)}">${escapeHtml(meetingTitles)}</small></td><td><span class="font-black ${badgeClass}">${rate}%</span></td><td><div class="flex items-center gap-2"><input class="rating-input" type="number" min="0" max="5" step="0.1" value="${Number(user.performanceRating || 0).toFixed(1)}" data-rating-id="${user.id}" aria-label="Performance rating for ${escapeHtml(user.name)}" /><button class="save-rating" data-save-rating="${user.id}">Save</button></div></td></tr>`;
   }).join('');
 }
 
@@ -523,6 +533,7 @@ async function submitMeeting(form) {
   const allEmployees = state.users.filter((user) => user.role === 'employee' && user.active !== false).every((user) => selected.includes(user.id));
   data.participantIds = selected;
   data.allEmployees = allEmployees;
+  data.allowConflicts = Boolean(form.querySelector('[name="allowConflicts"]')?.checked);
   data.durationMinutes = Number(data.durationMinutes || 60);
   try {
     const result = await api('/api/meetings', { method: 'POST', body: JSON.stringify(data) });
@@ -578,8 +589,13 @@ function setDefaultRequestDate() {
 }
 
 async function updateAttendance(meetingId, status, userId = state.user.id) {
+  let reason = '';
+  if (status === 'absent' || status === 'busy') {
+    reason = window.prompt('Please provide a reason why you cannot attend (e.g. attending another conflicting meeting):', '');
+    if (reason === null) return;
+  }
   try {
-    const result = await api(`/api/meetings/${meetingId}/participants/${userId}/status`, { method: 'PATCH', body: JSON.stringify({ status }) });
+    const result = await api(`/api/meetings/${meetingId}/participants/${userId}/status`, { method: 'PATCH', body: JSON.stringify({ status, reason: reason || '' }) });
     const index = state.meetings.findIndex((meeting) => meeting.id === meetingId);
     if (index >= 0) state.meetings[index] = result.meeting;
     await reloadAnalyticsAndRender();
@@ -628,10 +644,12 @@ async function updateParticipantAdmin(meetingId, userId, status) {
 
 async function approveMeetingRequest(requestId) {
   const input = document.querySelector(`[data-request-room="${CSS.escape(requestId)}"]`);
+  const allowConflictsInput = document.querySelector(`[data-request-allow-conflicts="${CSS.escape(requestId)}"]`);
   const room = String(input?.value || '').trim();
+  const allowConflicts = Boolean(allowConflictsInput?.checked);
   if (!room) return showToast('Enter a meeting room before approving.', 'error');
   try {
-    await api(`/api/meeting-requests/${requestId}/approve`, { method: 'PATCH', body: JSON.stringify({ room }) });
+    await api(`/api/meeting-requests/${requestId}/approve`, { method: 'PATCH', body: JSON.stringify({ room, allowConflicts }) });
     showToast('Request approved and meeting created.', 'success');
     await reloadAnalyticsAndRender();
     await refreshAudit();
