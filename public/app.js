@@ -301,12 +301,13 @@ function renderDashboard() {
 function requestParticipantOptions() {
   const container = $('#request-participant-list');
   if (!container || state.user?.role === 'admin') return;
-  const employees = state.users.filter((user) => user.role === 'employee' && user.active !== false && user.id !== state.user.id);
-  if (!employees.length) {
-    container.innerHTML = '<div class="empty-state col-span-full">No other active employees found. You will still be included.</div>';
+  const currentId = String(state.user?.id || '');
+  const colleagues = state.users.filter((user) => user.active !== false && String(user.id) !== currentId);
+  if (!colleagues.length) {
+    container.innerHTML = '<div class="empty-state col-span-full">No other active colleagues found. You will still be included.</div>';
     return;
   }
-  container.innerHTML = employees.map((user) => `<label class="participant-option"><input type="checkbox" name="requestParticipantIds" value="${escapeHtml(user.id)}" /><span class="participant-avatar">${initials(user.name)}</span><span class="min-w-0"><p class="text-xs font-extrabold text-slate-700 dark:text-slate-200">${escapeHtml(user.name)}</p><p class="mt-0.5 truncate text-[10px] font-semibold text-slate-400">${escapeHtml(user.email)} · ${escapeHtml(user.timezone)}</p></span></label>`).join('');
+  container.innerHTML = colleagues.map((user) => `<label class="participant-option"><input type="checkbox" name="requestParticipantIds" value="${escapeHtml(user.id)}" /><span class="participant-avatar">${initials(user.name)}</span><span class="min-w-0"><p class="text-xs font-extrabold text-slate-700 dark:text-slate-200">${escapeHtml(user.name)}</p><p class="mt-0.5 truncate text-[10px] font-semibold text-slate-400">${escapeHtml(user.email)} · ${escapeHtml(user.department || user.role)}</p></span></label>`).join('');
   $$('input[name="requestParticipantIds"]', container).forEach((input) => input.addEventListener('change', () => input.closest('.participant-option').classList.toggle('selected', input.checked)));
 }
 
@@ -541,7 +542,7 @@ async function submitMeeting(form) {
 async function submitMeetingRequest(form) {
   const data = Object.fromEntries(new FormData(form).entries());
   const selected = $$('input[name="requestParticipantIds"]:checked').map((input) => input.value);
-  const otherEmployees = state.users.filter((user) => user.role === 'employee' && user.active !== false && user.id !== state.user.id);
+  const otherEmployees = state.users.filter((user) => user.active !== false && String(user.id) !== String(state.user?.id));
   data.participantIds = selected;
   data.allEmployees = otherEmployees.length > 0 && otherEmployees.every((user) => selected.includes(user.id));
   data.durationMinutes = Number(data.durationMinutes || 60);

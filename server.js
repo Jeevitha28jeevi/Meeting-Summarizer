@@ -261,15 +261,16 @@ function normalizeEmail(email) {
 }
 
 async function connectDatabase() {
-  if (!process.env.MONGO_URI) {
-    console.warn('MONGO_URI is not configured. Starting in memory demo mode. Add it to .env for MongoDB Atlas.');
+  const mongoUri = process.env.MONGO_URI || process.env.MONGODB_URI;
+  if (!mongoUri) {
+    console.warn('MONGO_URI or MONGODB_URI is not configured. Starting in memory demo mode. Add it to .env for MongoDB Atlas.');
     dbMode = 'memory-demo';
     await seedMemoryUsers();
     return;
   }
 
   try {
-    await mongoose.connect(process.env.MONGO_URI, {
+    await mongoose.connect(mongoUri, {
       serverSelectionTimeoutMS: 10000
     });
     dbMode = 'mongodb-atlas';
@@ -279,6 +280,20 @@ async function connectDatabase() {
     console.error('MongoDB connection failed; falling back to memory demo mode:', error.message);
     dbMode = 'memory-demo';
     await seedMemoryUsers();
+  }
+}
+
+let dbPromise = null;
+async function ensureDbConnected(req, res, next) {
+  try {
+    if (!dbPromise) {
+      dbPromise = connectDatabase();
+    }
+    await dbPromise;
+    next();
+  } catch (error) {
+    console.error('Error in ensureDbConnected:', error);
+    next();
   }
 }
 
@@ -744,12 +759,14 @@ app.get('/api/auth/me', auth, (req, res) => {
 });
 
 // Users and employee performance
+app.use('/api', ensureDbConnected);
+
 app.get('/api/users', auth, async (req, res, next) => {
   try {
     const users = await listUsersRaw();
     const visibleUsers = req.currentUser.role === 'admin'
       ? users
-      : users.filter((user) => user.role === 'employee' && user.active !== false);
+      : users.filter((user) => user.active !== false);
     res.json({ users: visibleUsers.map(safeUser) });
   } catch (error) {
     next(error);
@@ -822,8 +839,8 @@ app.post('/api/meeting-requests', auth, requireRole('employee'), async (req, res
     const selectedUsers = [];
     for (const participantId of participantIds) {
       const user = await findUserById(participantId);
-      if (!user || user.active === false || user.role !== 'employee') {
-        return res.status(400).json({ message: `Employee ${participantId} is not available.` });
+      if (!user || user.active === false) {
+        return res.status(400).json({ message: `User ${participantId} is not available.` });
       }
       selectedUsers.push(user);
     }
