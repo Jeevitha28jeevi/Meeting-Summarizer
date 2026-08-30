@@ -201,6 +201,8 @@ textarea.input { line-height: 1.55; }
 .dark .loading-line { background: linear-gradient(90deg, #172238, #22304a, #172238); background-size: 200% 100%; }
 @keyframes shimmer { to { background-position: -200% 0; } }
 
+html, body { overflow-x: hidden; width: 100%; }
+
 .notif-item { display: flex; align-items: flex-start; gap: 10px; padding: 10px; border-radius: 12px; transition: background .15s ease; cursor: pointer; }
 .notif-item:hover { background: rgba(241, 245, 249, 0.8); }
 .dark .notif-item:hover { background: rgba(30, 41, 59, 0.7); }
@@ -216,6 +218,8 @@ textarea.input { line-height: 1.55; }
 .notif-icon.absence_reason { background: #ffe4e6; color: #be123c; }
 .dark .notif-icon.absence_reason { background: rgba(190, 18, 60, 0.3); color: #fda4af; }
 
+.participant-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 9px; }
+
 @media (max-width: 1023px) {
   .sidebar { position: fixed; inset: 0 auto 0 0; z-index: 60; transform: translateX(-102%); box-shadow: 20px 0 45px rgba(20, 32, 61, .18); }
   .sidebar.open { transform: translateX(0); }
@@ -223,9 +227,17 @@ textarea.input { line-height: 1.55; }
   .sidebar.open::after { opacity: 1; pointer-events: auto; }
 }
 @media (max-width: 640px) {
-  .topbar { height: 76px; padding-inline: 14px; }
-  .page-wrap { padding: 18px 14px 45px; }
-  .metric-card strong { font-size: 28px; }
+  .topbar { height: 72px; padding-inline: 12px; }
+  .page-wrap { padding: 16px 12px 40px; }
+  .metric-card strong { font-size: 26px; }
   .meeting-meta { gap: 6px 10px; }
-  #notification-popover { right: -60px; width: calc(100vw - 28px); max-width: 350px; }
+  .primary-button, .secondary-button { min-height: 42px; width: 100%; justify-content: center; }
+  .attendance-button { min-height: 38px; padding: 8px 12px; font-size: 11px; }
+  .attendance-row { grid-template-columns: minmax(60px, 1fr) 1.25fr 36px; gap: 8px; }
+  #notification-popover { right: -10px; width: calc(100vw - 24px); max-width: 340px; }
+}
+@media (max-width: 380px) {
+  .topbar { padding-inline: 8px; }
+  .page-wrap { padding: 12px 8px 30px; }
+  .participant-grid { grid-template-columns: 1fr; }
 }

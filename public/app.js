@@ -922,8 +922,27 @@ function bindEvents() {
     }
   });
 
-  $$('.nav-item').forEach((button) => button.addEventListener('click', () => showPage(button.dataset.page)));
-  $$('[data-page-jump]').forEach((button) => button.addEventListener('click', () => showPage(button.dataset.pageJump)));
+  $('#sidebar-toggle').addEventListener('click', (e) => {
+    e.stopPropagation();
+    $('#sidebar').classList.toggle('open');
+  });
+
+  document.addEventListener('click', (event) => {
+    if (window.innerWidth < 1024) {
+      if (!event.target.closest('#sidebar') && !event.target.closest('#sidebar-toggle')) {
+        $('#sidebar')?.classList.remove('open');
+      }
+    }
+  });
+
+  $$('.nav-item').forEach((button) => button.addEventListener('click', () => {
+    showPage(button.dataset.page);
+    $('#sidebar')?.classList.remove('open');
+  }));
+  $$('[data-page-jump]').forEach((button) => button.addEventListener('click', () => {
+    showPage(button.dataset.pageJump);
+    $('#sidebar')?.classList.remove('open');
+  }));
 
   $('#global-search').addEventListener('input', (event) => { $('#meeting-search').value = event.target.value; if (event.target.value) showPage('meetings'); renderMeetings(); });
   $('#meeting-search').addEventListener('input', renderMeetings);
