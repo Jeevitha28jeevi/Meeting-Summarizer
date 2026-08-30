@@ -227,11 +227,21 @@ async function tryRestoreSession() {
   }
 }
 
+function deduplicateNotifications(list) {
+  const seen = new Set();
+  return (list || []).filter((n) => {
+    const key = n.refId ? `${n.type}:${n.refId}` : `${n.type}:${n.title}:${n.message}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 async function loadNotifications() {
   if (!state.token) return;
   try {
     const result = await api('/api/notifications');
-    state.notifications = result.notifications || [];
+    state.notifications = deduplicateNotifications(result.notifications);
     renderNotifications();
   } catch (error) {
     console.error('Failed to load notifications:', error);
@@ -355,7 +365,7 @@ async function loadWorkspace() {
     state.analytics = analyticsResult;
     state.users = usersResult.users || [];
     state.meetingRequests = requestResult.meetingRequests || [];
-    state.notifications = notifResult.notifications || [];
+    state.notifications = deduplicateNotifications(notifResult.notifications);
     const scheduledCount = state.meetings.filter((meeting) => meeting.status === 'scheduled').length;
     const pendingCount = state.user?.role === 'admin' ? state.meetingRequests.filter((r) => r.status === 'pending').length : 0;
     $('#nav-meeting-count').textContent = pendingCount > 0 ? `${scheduledCount} (${pendingCount} req)` : (scheduledCount || '');

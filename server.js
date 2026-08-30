@@ -553,39 +553,77 @@ async function updateMeetingRequestRaw(id, patch) {
 
 async function findNotificationExists(targetUser, refId, type) {
   if (!refId) return false;
+  const targets = Array.isArray(targetUser) ? targetUser.map(String) : [String(targetUser)];
   if (dbMode === 'mongodb-atlas') {
-    const found = await NotificationModel.findOne({ targetUser: String(targetUser), refId: String(refId), type: String(type) }).lean();
+    const found = await NotificationModel.findOne({ targetUser: { $in: targets }, refId: String(refId), type: String(type) }).lean();
     return Boolean(found);
   }
-  return memory.notifications.some((n) => n.targetUser === String(targetUser) && n.refId === String(refId) && n.type === String(type));
+  return memory.notifications.some((n) => targets.includes(String(n.targetUser)) && String(n.refId) === String(refId) && String(n.type) === String(type));
+}
+
+async function findNotificationByMessageExists(targetUser, type, message) {
+  const targets = Array.isArray(targetUser) ? targetUser.map(String) : [String(targetUser)];
+  if (dbMode === 'mongodb-atlas') {
+    const found = await NotificationModel.findOne({ targetUser: { $in: targets }, type: String(type), message: String(message) }).lean();
+    return Boolean(found);
+  }
+  return memory.notifications.some((n) => targets.includes(String(n.targetUser)) && String(n.type) === String(type) && String(n.message) === String(message));
 }
 
 async function createNotificationRaw(data) {
+  const targetUser = String(data.targetUser);
+  const type = String(data.type);
+  const refId = String(data.refId || '');
+  const message = String(data.message || '');
+
+  // Prevent duplicate creation
+  if (refId) {
+    const exists = await findNotificationExists(targetUser, refId, type);
+    if (exists) return null;
+  } else if (message) {
+    const exists = await findNotificationByMessageExists(targetUser, type, message);
+    if (exists) return null;
+  }
+
   if (dbMode === 'mongodb-atlas') {
     return NotificationModel.create({
-      targetUser: String(data.targetUser),
-      type: String(data.type),
+      targetUser,
+      type,
       title: String(data.title),
-      message: String(data.message),
+      message,
       linkPage: String(data.linkPage || 'meetings'),
-      refId: String(data.refId || ''),
+      refId,
       read: false
     });
   }
   const notif = {
     id: newId(),
-    targetUser: String(data.targetUser),
-    type: String(data.type),
+    targetUser,
+    type,
     title: String(data.title),
-    message: String(data.message),
+    message,
     linkPage: String(data.linkPage || 'meetings'),
-    refId: String(data.refId || ''),
+    refId,
     read: false,
     createdAt: new Date(),
     updatedAt: new Date()
   };
   memory.notifications.unshift(notif);
   return notif;
+}
+
+function deduplicateNotifications(items) {
+  const seen = new Set();
+  const unique = [];
+  for (const item of items) {
+    const ref = item.refId ? String(item.refId) : '';
+    const key = ref ? `${item.type}:${ref}` : `${item.type}:${item.title}:${item.message}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      unique.push(item);
+    }
+  }
+  return unique;
 }
 
 async function listNotificationsForUser(currentUser) {
@@ -662,8 +700,8 @@ async function listNotificationsForUser(currentUser) {
 
   if (dbMode === 'mongodb-atlas') {
     const query = { targetUser: { $in: userOrTargets } };
-    const items = await NotificationModel.find(query).sort({ createdAt: -1 }).limit(30).lean();
-    return items.map((item) => ({
+    const items = await NotificationModel.find(query).sort({ createdAt: -1 }).limit(50).lean();
+    const mapped = items.map((item) => ({
       id: idOf(item),
       targetUser: item.targetUser,
       type: item.type,
@@ -674,10 +712,11 @@ async function listNotificationsForUser(currentUser) {
       read: Boolean(item.read),
       createdAt: dateIso(item.createdAt)
     }));
+    return deduplicateNotifications(mapped).slice(0, 30);
   }
 
   const items = memory.notifications.filter((item) => userOrTargets.includes(item.targetUser));
-  return items.slice(0, 30).map((item) => ({
+  const mapped = items.map((item) => ({
     id: idOf(item),
     targetUser: item.targetUser,
     type: item.type,
@@ -688,6 +727,7 @@ async function listNotificationsForUser(currentUser) {
     read: Boolean(item.read),
     createdAt: dateIso(item.createdAt)
   }));
+  return deduplicateNotifications(mapped).slice(0, 30);
 }
 
 async function markNotificationReadRaw(id, currentUser) {
@@ -1117,7 +1157,8 @@ app.post('/api/meeting-requests', auth, requireRole('employee'), async (req, res
       type: 'meeting_request',
       title: 'New Meeting Request',
       message: `${req.currentUser.name} requested a meeting: "${req.body.title}".`,
-      linkPage: 'meetings'
+      linkPage: 'meetings',
+      refId: idOf(request)
     });
     res.status(201).json({ meetingRequest: meetingRequestDTO(request, await usersMap()) });
   } catch (error) {
@@ -1219,7 +1260,8 @@ app.patch('/api/meeting-requests/:id/approve', auth, requireRole('admin'), async
       type: 'request_response',
       title: 'Meeting Request Approved',
       message: `Your meeting request "${request.title}" was approved in room "${room}".`,
-      linkPage: 'meetings'
+      linkPage: 'meetings',
+      refId: idOf(request)
     });
     res.json({ meetingRequest: meetingRequestDTO(updatedRequest, map), meeting: meetingDTO(meeting, map), conflicts });
   } catch (error) {
@@ -1244,7 +1286,8 @@ app.patch('/api/meeting-requests/:id/reject', auth, requireRole('admin'), async 
       type: 'request_response',
       title: 'Meeting Request Rejected',
       message: `Your request "${request.title}" was rejected. ${reason ? `Reason: ${reason}` : ''}`,
-      linkPage: 'meetings'
+      linkPage: 'meetings',
+      refId: idOf(request)
     });
     res.json({ meetingRequest: meetingRequestDTO(updatedRequest, await usersMap()) });
   } catch (error) {
@@ -1374,7 +1417,8 @@ app.post('/api/meetings', auth, requireRole('admin'), async (req, res, next) => 
           type: 'new_meeting',
           title: 'New Meeting Scheduled',
           message: `Admin scheduled meeting "${req.body.title}". Please respond with Attending or Absent.`,
-          linkPage: 'meetings'
+          linkPage: 'meetings',
+          refId: idOf(meeting)
         });
       }
     }
@@ -1436,7 +1480,8 @@ app.patch('/api/meetings/:id/participants/:userId/status', auth, async (req, res
         type: 'absence_reason',
         title: 'Employee Marked Absent',
         message: `${pUser.name || 'Employee'} marked Absent for "${meeting.title}".${reasonStr}`,
-        linkPage: 'meetings'
+        linkPage: 'meetings',
+        refId: `${idOf(meeting)}:${targetUserId}`
       });
     }
     res.json({ meeting: meetingDTO(updatedMeeting, await usersMap()) });
