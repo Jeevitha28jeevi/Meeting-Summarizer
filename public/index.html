@@ -78,9 +78,23 @@
               <p id="login-message" class="form-message"></p>
             </form>
             <div class="mt-7 rounded-2xl border border-indigo-100 bg-indigo-50 p-4 text-xs leading-5 text-indigo-800 dark:border-indigo-900/60 dark:bg-indigo-950/40 dark:text-indigo-200">
-              <p class="font-extrabold">Demo accounts (when no Atlas URI is configured)</p>
-              <p class="mt-1"><b>Admin:</b> admin@example.com / Admin@123</p>
-              <p><b>Employee:</b> employee@example.com / Employee@123</p>
+              <p class="font-extrabold mb-2">Demo accounts (Click to quick-fill)</p>
+              <div class="space-y-2">
+                <button type="button" class="demo-credential-fill w-full text-left rounded-xl p-2 bg-white/70 hover:bg-white dark:bg-slate-800/70 dark:hover:bg-slate-800 border border-indigo-100 dark:border-indigo-900/50 transition flex items-center justify-between group" data-email="admin@example.com" data-password="Admin@123">
+                  <div>
+                    <p class="font-bold text-slate-800 dark:text-slate-100">👑 Admin Account</p>
+                    <p class="text-[11px] text-slate-500 dark:text-slate-400">admin@example.com · Admin@123</p>
+                  </div>
+                  <span class="text-[10px] font-extrabold px-2.5 py-1 rounded-lg bg-indigo-600 text-white group-hover:bg-indigo-700 transition">Fill Admin</span>
+                </button>
+                <button type="button" class="demo-credential-fill w-full text-left rounded-xl p-2 bg-white/70 hover:bg-white dark:bg-slate-800/70 dark:hover:bg-slate-800 border border-indigo-100 dark:border-indigo-900/50 transition flex items-center justify-between group" data-email="employee@example.com" data-password="Employee@123">
+                  <div>
+                    <p class="font-bold text-slate-800 dark:text-slate-100">👤 Employee Account</p>
+                    <p class="text-[11px] text-slate-500 dark:text-slate-400">employee@example.com · Employee@123</p>
+                  </div>
+                  <span class="text-[10px] font-extrabold px-2.5 py-1 rounded-lg bg-indigo-600 text-white group-hover:bg-indigo-700 transition">Fill Employee</span>
+                </button>
+              </div>
             </div>
           </div>
 

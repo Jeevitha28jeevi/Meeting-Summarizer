@@ -69,14 +69,28 @@ function formatRelative(iso) {
   return formatDateTime(iso, currentTimezone(), { dateStyle: 'medium', timeStyle: 'short' });
 }
 
+function getApiUrl(path) {
+  if (path.startsWith('http://') || path.startsWith('https://')) return path;
+  if (window.location.protocol === 'file:' || ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && window.location.port !== '3000' && window.location.port !== '')) {
+    return `http://localhost:3000${path}`;
+  }
+  return path;
+}
+
 async function api(path, options = {}) {
   const headers = { ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...(options.headers || {}) };
   if (state.token) headers.Authorization = `Bearer ${state.token}`;
-  const response = await fetch(path, { ...options, headers });
+  const targetUrl = getApiUrl(path);
+  let response;
+  try {
+    response = await fetch(targetUrl, { ...options, headers });
+  } catch (err) {
+    throw new Error('Cannot connect to backend server. Please ensure Node server is running (npm start / node server.js).');
+  }
   const contentType = response.headers.get('content-type') || '';
   const data = contentType.includes('application/json') ? await response.json() : await response.text();
   if (!response.ok) {
-    const error = new Error(data?.message || 'Request failed.');
+    const error = new Error(data?.message || `Request failed with status ${response.status}.`);
     error.status = response.status;
     error.data = data;
     throw error;
@@ -329,7 +343,6 @@ function adminRequestCard(request) {
   const requestedUtc = formatUtc(request.requestedStartAt);
   const participants = (request.participants || []).map((user) => user.name).join(', ');
   return `<article class="meeting-card"><div class="flex flex-col justify-between gap-4 lg:flex-row lg:items-start"><div class="min-w-0 flex-1"><div class="flex flex-wrap items-center gap-2">${statusPill('pending')}<span class="text-[10px] font-bold text-slate-400">Request #${escapeHtml(request.id.slice(0, 8))}</span></div><h3 class="meeting-title mt-2">${escapeHtml(request.title)}</h3><p class="meeting-description mt-1">${escapeHtml(request.agenda || 'No agenda provided.')}</p><div class="mt-3 meeting-meta"><span>Host (Requester): ${escapeHtml(request.requester?.name || 'Employee')}</span><span>◷ ${escapeHtml(requestedLocal)}</span><span>UTC ${escapeHtml(requestedUtc.replace(' UTC', ''))}</span><span>◎ ${escapeHtml(request.timezone)}</span></div><p class="mt-3 text-xs font-semibold text-slate-500 dark:text-slate-400"><b>Participants:</b> ${escapeHtml(participants || 'Requester')}</p>${request.roomPreference ? `<p class="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400"><b>Room preference:</b> ${escapeHtml(request.roomPreference)}</p>` : ''}</div><div class="w-full lg:max-w-xs"><label class="field-label">Assign meeting room<input class="input" data-request-room="${escapeHtml(request.id)}" value="${escapeHtml(request.roomPreference || '')}" placeholder="Boardroom A / Zoom" /></label><label class="mt-2 flex items-center gap-2 text-[11px] font-bold text-slate-500 dark:text-slate-400"><input type="checkbox" data-request-allow-conflicts="${escapeHtml(request.id)}" class="accent-indigo-600" /> Allow conflict override</label><div class="mt-3 flex flex-wrap gap-2"><button class="primary-button" data-approve-request="${escapeHtml(request.id)}">Approve request</button><button class="attendance-button" data-reject-request="${escapeHtml(request.id)}">Reject</button></div></div></div></article>`;
-}
 }
 
 function employeeRequestRow(request) {
@@ -727,6 +740,16 @@ async function downloadEndpoint(endpoint, filename) {
 }
 
 function bindEvents() {
+  $$('.demo-credential-fill').forEach((button) => button.addEventListener('click', () => {
+    const email = button.dataset.email;
+    const password = button.dataset.password;
+    const emailInput = $('#login-email');
+    const passwordInput = $('#login-password');
+    if (emailInput) emailInput.value = email;
+    if (passwordInput) passwordInput.value = password;
+    showToast(`Filled ${email} demo credentials.`, 'info');
+  }));
+
   $$('.auth-tab').forEach((tab) => tab.addEventListener('click', () => {
     const isLogin = tab.dataset.authTab === 'login';
     $$('.auth-tab').forEach((item) => item.classList.toggle('active', item === tab));

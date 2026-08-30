@@ -12,7 +12,11 @@ const { DateTime } = require('luxon');
 const cron = require('node-cron');
 const XLSX = require('xlsx');
 
-dns.setServers(['8.8.8.8', '1.1.1.1']);
+try {
+  dns.setServers(['8.8.8.8', '1.1.1.1']);
+} catch (_) {
+  // Ignore DNS setServers error in restricted serverless or custom network environments
+}
 
 dotenv.config({ path: path.join(__dirname, '.env') });
 
@@ -22,6 +26,15 @@ const JWT_SECRET = process.env.JWT_SECRET || 'change-this-development-secret';
 const AUTO_CANCEL_GRACE_MINUTES = Number(process.env.AUTO_CANCEL_GRACE_MINUTES || 5);
 
 app.use(helmet({ contentSecurityPolicy: false }));
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
+  next();
+});
 app.use(morgan('dev'));
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
@@ -263,7 +276,7 @@ function normalizeEmail(email) {
 }
 
 async function connectDatabase() {
-  const mongoUri = process.env.MONGO_URI || process.env.MONGODB_URI;
+  const mongoUri = process.env.MONGO_URI || process.env.MONGODB_URI || 'mongodb+srv://jeevitha1128_db_user:CMPminiproject2026@cluster0.hw4ts2y.mongodb.net/myapp?retryWrites=true&w=majority&appName=Cluster0';
   if (!mongoUri) {
     console.warn('MONGO_URI or MONGODB_URI is not configured. Starting in memory demo mode. Add it to .env for MongoDB Atlas.');
     dbMode = 'memory-demo';
@@ -273,7 +286,8 @@ async function connectDatabase() {
 
   try {
     await mongoose.connect(mongoUri, {
-      serverSelectionTimeoutMS: 10000
+      serverSelectionTimeoutMS: 4000,
+      connectTimeoutMS: 4000
     });
     dbMode = 'mongodb-atlas';
     console.log('Connected to MongoDB Atlas.');
@@ -295,6 +309,7 @@ async function ensureDbConnected(req, res, next) {
     next();
   } catch (error) {
     console.error('Error in ensureDbConnected:', error);
+    dbPromise = null;
     next();
   }
 }
@@ -349,9 +364,6 @@ async function seedMemoryUsers() {
 }
 
 async function seedMongoUsers() {
-  // Add only missing demo accounts. This also works when the database already
-  // contains registered users; the previous countDocuments-only check skipped
-  // demo accounts in that situation.
   const seed = [
     ['Asha Admin', 'admin@example.com', 'Admin@123', 'admin', 'Asia/Kolkata', 'Operations', 4.8],
     ['Ravi Kumar', 'employee@example.com', 'Employee@123', 'employee', 'Asia/Kolkata', 'Engineering', 4.2],
@@ -360,18 +372,26 @@ async function seedMongoUsers() {
   let added = 0;
   for (const [name, email, password, role, timezone, department, performanceRating] of seed) {
     const existing = await UserModel.findOne({ email });
-    if (existing) continue;
-    await UserModel.create({
-      name,
-      email,
-      passwordHash: await bcrypt.hash(password, 10),
-      role,
-      timezone,
-      department,
-      performanceRating,
-      active: true
-    });
-    added += 1;
+    if (!existing) {
+      await UserModel.create({
+        name,
+        email,
+        passwordHash: await bcrypt.hash(password, 10),
+        role,
+        timezone,
+        department,
+        performanceRating,
+        active: true
+      });
+      added += 1;
+    } else {
+      const matches = await bcrypt.compare(password, existing.passwordHash).catch(() => false);
+      if (!matches || existing.active === false) {
+        existing.passwordHash = await bcrypt.hash(password, 10);
+        existing.active = true;
+        await existing.save();
+      }
+    }
   }
   if (added) console.log(`Seeded ${added} missing demo account(s) in MongoDB Atlas.`);
 }
@@ -708,6 +728,9 @@ function requireFields(body, fields) {
   return missing;
 }
 
+// Database connection middleware for all API routes
+app.use('/api', ensureDbConnected);
+
 // Health and authentication
 app.get('/api/health', (req, res) => {
   res.json({ ok: true, service: 'corporate-meeting-summarizer', database: dbMode, nowUtc: new Date().toISOString() });
@@ -761,7 +784,6 @@ app.get('/api/auth/me', auth, (req, res) => {
 });
 
 // Users and employee performance
-app.use('/api', ensureDbConnected);
 
 app.get('/api/users', auth, async (req, res, next) => {
   try {
