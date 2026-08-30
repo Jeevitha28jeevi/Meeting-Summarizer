@@ -130,6 +130,7 @@ const notificationSchema = new mongoose.Schema(
     title: { type: String, required: true },
     message: { type: String, required: true },
     linkPage: { type: String, default: 'meetings' },
+    refId: { type: String, default: '' },
     read: { type: Boolean, default: false }
   },
   { timestamps: true }
@@ -550,6 +551,15 @@ async function updateMeetingRequestRaw(id, patch) {
   return request;
 }
 
+async function findNotificationExists(targetUser, refId, type) {
+  if (!refId) return false;
+  if (dbMode === 'mongodb-atlas') {
+    const found = await NotificationModel.findOne({ targetUser: String(targetUser), refId: String(refId), type: String(type) }).lean();
+    return Boolean(found);
+  }
+  return memory.notifications.some((n) => n.targetUser === String(targetUser) && n.refId === String(refId) && n.type === String(type));
+}
+
 async function createNotificationRaw(data) {
   if (dbMode === 'mongodb-atlas') {
     return NotificationModel.create({
@@ -558,6 +568,7 @@ async function createNotificationRaw(data) {
       title: String(data.title),
       message: String(data.message),
       linkPage: String(data.linkPage || 'meetings'),
+      refId: String(data.refId || ''),
       read: false
     });
   }
@@ -568,6 +579,7 @@ async function createNotificationRaw(data) {
     title: String(data.title),
     message: String(data.message),
     linkPage: String(data.linkPage || 'meetings'),
+    refId: String(data.refId || ''),
     read: false,
     createdAt: new Date(),
     updatedAt: new Date()
@@ -578,11 +590,78 @@ async function createNotificationRaw(data) {
 
 async function listNotificationsForUser(currentUser) {
   const currentUserId = idOf(currentUser);
-  const isAdmin = currentUser.role === 'admin';
+  const email = currentUser.email ? normalizeEmail(currentUser.email) : '';
+  const role = currentUser.role || 'employee';
+
+  try {
+    if (role === 'employee') {
+      const meetings = await listMeetingRaw();
+      for (const m of meetings) {
+        if (m.status === 'scheduled') {
+          const p = (m.participants || []).find((item) => getParticipantUserId(item) === currentUserId);
+          if (p && p.status === 'pending') {
+            const exists = await findNotificationExists(currentUserId, idOf(m), 'new_meeting');
+            if (!exists) {
+              await createNotificationRaw({
+                targetUser: currentUserId,
+                type: 'new_meeting',
+                title: 'New Meeting Scheduled',
+                message: `Admin scheduled meeting "${m.title}". Please respond with Attending or Absent.`,
+                linkPage: 'meetings',
+                refId: idOf(m)
+              });
+            }
+          }
+        }
+      }
+    } else if (role === 'admin') {
+      const requests = await listMeetingRequestRaw();
+      for (const r of requests) {
+        if (r.status === 'pending') {
+          const exists = await findNotificationExists('admin', idOf(r), 'meeting_request');
+          if (!exists) {
+            const reqName = r.requester?.name || 'Employee';
+            await createNotificationRaw({
+              targetUser: 'admin',
+              type: 'meeting_request',
+              title: 'New Meeting Request',
+              message: `${reqName} requested a meeting: "${r.title}".`,
+              linkPage: 'meetings',
+              refId: idOf(r)
+            });
+          }
+        }
+      }
+      const meetings = await listMeetingRaw();
+      for (const m of meetings) {
+        for (const p of m.participants || []) {
+          if (p.status === 'absent' && p.absenceReason) {
+            const pId = getParticipantUserId(p);
+            const pName = p.user?.name || 'Employee';
+            const ref = `${idOf(m)}:${pId}`;
+            const exists = await findNotificationExists('admin', ref, 'absence_reason');
+            if (!exists) {
+              await createNotificationRaw({
+                targetUser: 'admin',
+                type: 'absence_reason',
+                title: 'Employee Marked Absent',
+                message: `${pName} marked Absent for "${m.title}". Reason: "${p.absenceReason}"`,
+                linkPage: 'meetings',
+                refId: ref
+              });
+            }
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Error auto-syncing notifications:', err);
+  }
+
+  const userOrTargets = [currentUserId, email, role].filter(Boolean);
+
   if (dbMode === 'mongodb-atlas') {
-    const query = isAdmin
-      ? { $or: [{ targetUser: currentUserId }, { targetUser: 'admin' }] }
-      : { targetUser: currentUserId };
+    const query = { targetUser: { $in: userOrTargets } };
     const items = await NotificationModel.find(query).sort({ createdAt: -1 }).limit(30).lean();
     return items.map((item) => ({
       id: idOf(item),
@@ -595,10 +674,8 @@ async function listNotificationsForUser(currentUser) {
       createdAt: dateIso(item.createdAt)
     }));
   }
-  const items = memory.notifications.filter((item) => {
-    if (isAdmin) return item.targetUser === currentUserId || item.targetUser === 'admin';
-    return item.targetUser === currentUserId;
-  });
+
+  const items = memory.notifications.filter((item) => userOrTargets.includes(item.targetUser));
   return items.slice(0, 30).map((item) => ({
     id: idOf(item),
     targetUser: item.targetUser,
@@ -613,30 +690,32 @@ async function listNotificationsForUser(currentUser) {
 
 async function markNotificationReadRaw(id, currentUser) {
   const currentUserId = idOf(currentUser);
-  const isAdmin = currentUser.role === 'admin';
+  const email = currentUser.email ? normalizeEmail(currentUser.email) : '';
+  const role = currentUser.role || 'employee';
+  const userOrTargets = [currentUserId, email, role].filter(Boolean);
+
   if (dbMode === 'mongodb-atlas') {
-    const query = isAdmin
-      ? { _id: id, $or: [{ targetUser: currentUserId }, { targetUser: 'admin' }] }
-      : { _id: id, targetUser: currentUserId };
+    const query = { _id: id, targetUser: { $in: userOrTargets } };
     return NotificationModel.findOneAndUpdate(query, { $set: { read: true } }, { new: true });
   }
-  const item = memory.notifications.find((n) => idOf(n) === String(id) && (isAdmin ? (n.targetUser === currentUserId || n.targetUser === 'admin') : n.targetUser === currentUserId));
+  const item = memory.notifications.find((n) => idOf(n) === String(id) && userOrTargets.includes(n.targetUser));
   if (item) item.read = true;
   return item;
 }
 
 async function markAllNotificationsReadRaw(currentUser) {
   const currentUserId = idOf(currentUser);
-  const isAdmin = currentUser.role === 'admin';
+  const email = currentUser.email ? normalizeEmail(currentUser.email) : '';
+  const role = currentUser.role || 'employee';
+  const userOrTargets = [currentUserId, email, role].filter(Boolean);
+
   if (dbMode === 'mongodb-atlas') {
-    const query = isAdmin
-      ? { $or: [{ targetUser: currentUserId }, { targetUser: 'admin' }] }
-      : { targetUser: currentUserId };
+    const query = { targetUser: { $in: userOrTargets } };
     await NotificationModel.updateMany(query, { $set: { read: true } });
     return true;
   }
   memory.notifications.forEach((item) => {
-    if (isAdmin ? (item.targetUser === currentUserId || item.targetUser === 'admin') : item.targetUser === currentUserId) {
+    if (userOrTargets.includes(item.targetUser)) {
       item.read = true;
     }
   });
