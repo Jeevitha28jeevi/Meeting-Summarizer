@@ -123,13 +123,26 @@ const auditSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+const notificationSchema = new mongoose.Schema(
+  {
+    targetUser: { type: String, required: true },
+    type: { type: String, required: true },
+    title: { type: String, required: true },
+    message: { type: String, required: true },
+    linkPage: { type: String, default: 'meetings' },
+    read: { type: Boolean, default: false }
+  },
+  { timestamps: true }
+);
+
 const UserModel = mongoose.model('User', userSchema);
 const MeetingModel = mongoose.model('Meeting', meetingSchema);
 const MeetingRequestModel = mongoose.model('MeetingRequest', meetingRequestSchema);
 const AuditModel = mongoose.model('AuditLog', auditSchema);
+const NotificationModel = mongoose.model('Notification', notificationSchema);
 
 let dbMode = 'memory-demo';
-const memory = { users: [], meetings: [], meetingRequests: [], auditLogs: [] };
+const memory = { users: [], meetings: [], meetingRequests: [], auditLogs: [], notifications: [] };
 
 function newId() {
   return crypto.randomUUID();
@@ -537,6 +550,99 @@ async function updateMeetingRequestRaw(id, patch) {
   return request;
 }
 
+async function createNotificationRaw(data) {
+  if (dbMode === 'mongodb-atlas') {
+    return NotificationModel.create({
+      targetUser: String(data.targetUser),
+      type: String(data.type),
+      title: String(data.title),
+      message: String(data.message),
+      linkPage: String(data.linkPage || 'meetings'),
+      read: false
+    });
+  }
+  const notif = {
+    id: newId(),
+    targetUser: String(data.targetUser),
+    type: String(data.type),
+    title: String(data.title),
+    message: String(data.message),
+    linkPage: String(data.linkPage || 'meetings'),
+    read: false,
+    createdAt: new Date(),
+    updatedAt: new Date()
+  };
+  memory.notifications.unshift(notif);
+  return notif;
+}
+
+async function listNotificationsForUser(currentUser) {
+  const currentUserId = idOf(currentUser);
+  const isAdmin = currentUser.role === 'admin';
+  if (dbMode === 'mongodb-atlas') {
+    const query = isAdmin
+      ? { $or: [{ targetUser: currentUserId }, { targetUser: 'admin' }] }
+      : { targetUser: currentUserId };
+    const items = await NotificationModel.find(query).sort({ createdAt: -1 }).limit(30).lean();
+    return items.map((item) => ({
+      id: idOf(item),
+      targetUser: item.targetUser,
+      type: item.type,
+      title: item.title,
+      message: item.message,
+      linkPage: item.linkPage || 'meetings',
+      read: Boolean(item.read),
+      createdAt: dateIso(item.createdAt)
+    }));
+  }
+  const items = memory.notifications.filter((item) => {
+    if (isAdmin) return item.targetUser === currentUserId || item.targetUser === 'admin';
+    return item.targetUser === currentUserId;
+  });
+  return items.slice(0, 30).map((item) => ({
+    id: idOf(item),
+    targetUser: item.targetUser,
+    type: item.type,
+    title: item.title,
+    message: item.message,
+    linkPage: item.linkPage || 'meetings',
+    read: Boolean(item.read),
+    createdAt: dateIso(item.createdAt)
+  }));
+}
+
+async function markNotificationReadRaw(id, currentUser) {
+  const currentUserId = idOf(currentUser);
+  const isAdmin = currentUser.role === 'admin';
+  if (dbMode === 'mongodb-atlas') {
+    const query = isAdmin
+      ? { _id: id, $or: [{ targetUser: currentUserId }, { targetUser: 'admin' }] }
+      : { _id: id, targetUser: currentUserId };
+    return NotificationModel.findOneAndUpdate(query, { $set: { read: true } }, { new: true });
+  }
+  const item = memory.notifications.find((n) => idOf(n) === String(id) && (isAdmin ? (n.targetUser === currentUserId || n.targetUser === 'admin') : n.targetUser === currentUserId));
+  if (item) item.read = true;
+  return item;
+}
+
+async function markAllNotificationsReadRaw(currentUser) {
+  const currentUserId = idOf(currentUser);
+  const isAdmin = currentUser.role === 'admin';
+  if (dbMode === 'mongodb-atlas') {
+    const query = isAdmin
+      ? { $or: [{ targetUser: currentUserId }, { targetUser: 'admin' }] }
+      : { targetUser: currentUserId };
+    await NotificationModel.updateMany(query, { $set: { read: true } });
+    return true;
+  }
+  memory.notifications.forEach((item) => {
+    if (isAdmin ? (item.targetUser === currentUserId || item.targetUser === 'admin') : item.targetUser === currentUserId) {
+      item.read = true;
+    }
+  });
+  return true;
+}
+
 async function updateMeetingRaw(id, patch) {
   if (dbMode === 'mongodb-atlas') {
     return MeetingModel.findByIdAndUpdate(id, { $set: patch }, { new: true })
@@ -788,8 +894,34 @@ app.post('/api/auth/login', async (req, res, next) => {
   }
 });
 
-app.get('/api/auth/me', auth, (req, res) => {
-  res.json({ user: safeUser(req.currentUser) });
+// Notifications API
+
+app.get('/api/notifications', auth, async (req, res, next) => {
+  try {
+    const list = await listNotificationsForUser(req.currentUser);
+    res.json({ notifications: list });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.patch('/api/notifications/read-all', auth, async (req, res, next) => {
+  try {
+    await markAllNotificationsReadRaw(req.currentUser);
+    res.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.patch('/api/notifications/:id/read', auth, async (req, res, next) => {
+  try {
+    const updated = await markNotificationReadRaw(req.params.id, req.currentUser);
+    if (!updated) return res.status(404).json({ message: 'Notification not found.' });
+    res.json({ notification: updated });
+  } catch (error) {
+    next(error);
+  }
 });
 
 // Users and employee performance
@@ -899,6 +1031,13 @@ app.post('/api/meeting-requests', auth, requireRole('employee'), async (req, res
       participantCount: selectedUsers.length,
       timezone: schedule.timezone
     });
+    await createNotificationRaw({
+      targetUser: 'admin',
+      type: 'meeting_request',
+      title: 'New Meeting Request',
+      message: `${req.currentUser.name} requested a meeting: "${req.body.title}".`,
+      linkPage: 'meetings'
+    });
     res.status(201).json({ meetingRequest: meetingRequestDTO(request, await usersMap()) });
   } catch (error) {
     next(error);
@@ -994,6 +1133,13 @@ app.patch('/api/meeting-requests/:id/approve', auth, requireRole('admin'), async
       room,
       conflictOverride: Boolean(req.body.allowConflicts)
     });
+    await createNotificationRaw({
+      targetUser: requesterId,
+      type: 'request_response',
+      title: 'Meeting Request Approved',
+      message: `Your meeting request "${request.title}" was approved in room "${room}".`,
+      linkPage: 'meetings'
+    });
     res.json({ meetingRequest: meetingRequestDTO(updatedRequest, map), meeting: meetingDTO(meeting, map), conflicts });
   } catch (error) {
     next(error);
@@ -1012,6 +1158,13 @@ app.patch('/api/meeting-requests/:id/reject', auth, requireRole('admin'), async 
       adminNote: String(req.body.adminNote || '').trim()
     });
     await logAudit(req.currentUser, 'rejected_meeting_request', 'meeting_request', req.params.id, { reason });
+    await createNotificationRaw({
+      targetUser: idOf(request.requester),
+      type: 'request_response',
+      title: 'Meeting Request Rejected',
+      message: `Your request "${request.title}" was rejected. ${reason ? `Reason: ${reason}` : ''}`,
+      linkPage: 'meetings'
+    });
     res.json({ meetingRequest: meetingRequestDTO(updatedRequest, await usersMap()) });
   } catch (error) {
     next(error);
@@ -1132,6 +1285,18 @@ app.post('/api/meetings', auth, requireRole('admin'), async (req, res, next) => 
       startAtUtc: schedule.startAt.toISOString(),
       conflictOverride: Boolean(req.body.allowConflicts)
     });
+    for (const user of selectedUsers) {
+      const uid = idOf(user);
+      if (uid !== organizerId) {
+        await createNotificationRaw({
+          targetUser: uid,
+          type: 'new_meeting',
+          title: 'New Meeting Scheduled',
+          message: `Admin scheduled meeting "${req.body.title}". Please respond with Attending or Absent.`,
+          linkPage: 'meetings'
+        });
+      }
+    }
     res.status(201).json({ meeting: meetingDTO(meeting, map), conflicts });
   } catch (error) {
     next(error);
@@ -1181,6 +1346,18 @@ app.patch('/api/meetings/:id/participants/:userId/status', auth, async (req, res
       employeeId: targetUserId,
       reason: absenceReason
     });
+    if (requestedStatus === 'absent') {
+      const map = await usersMap();
+      const pUser = map.get(targetUserId) || req.currentUser;
+      const reasonStr = absenceReason ? ` Reason: "${absenceReason}"` : ' (No reason provided)';
+      await createNotificationRaw({
+        targetUser: 'admin',
+        type: 'absence_reason',
+        title: 'Employee Marked Absent',
+        message: `${pUser.name || 'Employee'} marked Absent for "${meeting.title}".${reasonStr}`,
+        linkPage: 'meetings'
+      });
+    }
     res.json({ meeting: meetingDTO(updatedMeeting, await usersMap()) });
   } catch (error) {
     next(error);

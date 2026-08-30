@@ -4,6 +4,7 @@ const state = {
   users: [],
   meetings: [],
   meetingRequests: [],
+  notifications: [],
   analytics: null,
   auditLogs: [],
   statusChart: null,
@@ -226,18 +227,94 @@ async function tryRestoreSession() {
   }
 }
 
+async function loadNotifications() {
+  if (!state.token) return;
+  try {
+    const result = await api('/api/notifications');
+    state.notifications = result.notifications || [];
+    renderNotifications();
+  } catch (error) {
+    console.error('Failed to load notifications:', error);
+  }
+}
+
+function renderNotifications() {
+  const badge = $('#notification-badge');
+  const unreadLabel = $('#notification-unread-count');
+  const container = $('#notification-list');
+  if (!badge || !container) return;
+
+  const unread = state.notifications.filter((n) => !n.read);
+  if (unread.length > 0) {
+    badge.textContent = unread.length > 99 ? '99+' : unread.length;
+    badge.classList.remove('hidden');
+  } else {
+    badge.classList.add('hidden');
+  }
+  if (unreadLabel) unreadLabel.textContent = `${unread.length} unread`;
+
+  if (!state.notifications.length) {
+    container.innerHTML = '<div class="empty-state py-6 text-xs text-slate-400">No notifications yet.</div>';
+    return;
+  }
+
+  const icons = {
+    new_meeting: '📅',
+    meeting_request: '✉️',
+    request_response: '📋',
+    absence_reason: '❌'
+  };
+
+  container.innerHTML = state.notifications.map((n) => `
+    <div class="notif-item ${!n.read ? 'unread' : ''}" data-notif-id="${escapeHtml(n.id)}" data-link-page="${escapeHtml(n.linkPage || 'meetings')}">
+      <div class="notif-icon ${escapeHtml(n.type)}">${icons[n.type] || '🔔'}</div>
+      <div class="min-w-0 flex-1">
+        <div class="flex items-center justify-between gap-1">
+          <p class="text-xs font-bold text-slate-800 dark:text-slate-100">${escapeHtml(n.title)}</p>
+          <span class="text-[9px] font-semibold text-slate-400">${escapeHtml(formatRelative(n.createdAt))}</span>
+        </div>
+        <p class="mt-0.5 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">${escapeHtml(n.message)}</p>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function markNotificationRead(id) {
+  try {
+    await api(`/api/notifications/${id}/read`, { method: 'PATCH' });
+    const item = state.notifications.find((n) => n.id === id);
+    if (item) item.read = true;
+    renderNotifications();
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+async function markAllNotificationsRead() {
+  try {
+    await api('/api/notifications/read-all', { method: 'PATCH' });
+    state.notifications.forEach((n) => { n.read = true; });
+    renderNotifications();
+    showToast('All notifications marked as read.', 'info');
+  } catch (error) {
+    console.error(error);
+  }
+}
+
 async function loadWorkspace() {
   try {
-    const [meetingsResult, analyticsResult, usersResult, requestResult] = await Promise.all([
+    const [meetingsResult, analyticsResult, usersResult, requestResult, notifResult] = await Promise.all([
       api('/api/meetings'),
       api('/api/analytics'),
       api('/api/users'),
-      api('/api/meeting-requests')
+      api('/api/meeting-requests'),
+      api('/api/notifications').catch(() => ({ notifications: [] }))
     ]);
     state.meetings = meetingsResult.meetings || [];
     state.analytics = analyticsResult;
     state.users = usersResult.users || [];
     state.meetingRequests = requestResult.meetingRequests || [];
+    state.notifications = notifResult.notifications || [];
     const scheduledCount = state.meetings.filter((meeting) => meeting.status === 'scheduled').length;
     const pendingCount = state.user?.role === 'admin' ? state.meetingRequests.filter((r) => r.status === 'pending').length : 0;
     $('#nav-meeting-count').textContent = pendingCount > 0 ? `${scheduledCount} (${pendingCount} req)` : (scheduledCount || '');
@@ -253,6 +330,7 @@ function renderAll() {
   renderEmployees();
   renderAudit();
   renderMeetingRequests();
+  renderNotifications();
   if (state.user?.role === 'admin') {
     participantOptions();
     populateHostSelect();
@@ -778,6 +856,26 @@ function bindEvents() {
   ['#theme-toggle', '#auth-theme-toggle'].forEach((selector) => $(selector)?.addEventListener('click', () => setTheme(!document.documentElement.classList.contains('dark'))));
   $('#logout-button').addEventListener('click', () => { state.token = ''; state.user = null; localStorage.removeItem('meetly_token'); showAuth(); showToast('You have been signed out.'); });
   $('#sidebar-toggle').addEventListener('click', () => $('#sidebar').classList.toggle('open'));
+
+  $('#notification-button')?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    $('#notification-popover')?.classList.toggle('hidden');
+  });
+  document.addEventListener('click', (event) => {
+    if (!event.target.closest('#notification-button') && !event.target.closest('#notification-popover')) {
+      $('#notification-popover')?.classList.add('hidden');
+    }
+  });
+  $('#mark-all-read-btn')?.addEventListener('click', markAllNotificationsRead);
+  $('#notification-list')?.addEventListener('click', (event) => {
+    const item = event.target.closest('[data-notif-id]');
+    if (!item) return;
+    const id = item.dataset.notifId;
+    const linkPage = item.dataset.linkPage;
+    markNotificationRead(id);
+    if (linkPage) showPage(linkPage);
+    $('#notification-popover')?.classList.add('hidden');
+  });
 
   $$('.nav-item').forEach((button) => button.addEventListener('click', () => showPage(button.dataset.page)));
   $$('[data-page-jump]').forEach((button) => button.addEventListener('click', () => showPage(button.dataset.pageJump)));

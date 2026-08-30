@@ -156,6 +156,24 @@
           </div>
           <div class="flex items-center gap-2 sm:gap-4">
             <label class="search-box hidden md:flex"><span>⌕</span><input id="global-search" type="search" placeholder="Search meetings..." /></label>
+            <div class="relative">
+              <button id="notification-button" class="icon-button relative" title="Notifications" aria-label="Notifications">
+                <span class="text-base">🔔</span>
+                <span id="notification-badge" class="absolute -right-1 -top-1 hidden h-4 min-w-[16px] rounded-full bg-rose-500 px-1 text-center text-[10px] font-black leading-4 text-white shadow-sm ring-2 ring-white dark:ring-slate-900">0</span>
+              </button>
+              <div id="notification-popover" class="hidden absolute right-0 top-12 z-50 w-[min(360px,calc(100vw-2rem))] rounded-2xl border border-slate-200 bg-white p-4 shadow-xl dark:border-slate-800 dark:bg-slate-900 backdrop-blur-lg">
+                <div class="mb-3 flex items-center justify-between border-b border-slate-100 pb-2.5 dark:border-slate-800">
+                  <div class="flex items-center gap-2">
+                    <h3 class="text-sm font-extrabold">Notifications</h3>
+                    <span id="notification-unread-count" class="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-black text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">0 new</span>
+                  </div>
+                  <button id="mark-all-read-btn" class="text-[11px] font-extrabold text-indigo-600 hover:underline dark:text-indigo-400">Mark all read</button>
+                </div>
+                <div id="notification-list" class="max-h-[340px] space-y-2 overflow-y-auto pr-1">
+                  <div class="empty-state py-6 text-xs text-slate-400">No notifications yet.</div>
+                </div>
+              </div>
+            </div>
             <button id="theme-toggle" class="icon-button" title="Toggle dark mode" aria-label="Toggle dark mode">◐</button>
             <div class="user-mini"><div id="user-avatar" class="avatar">A</div><div class="hidden text-left sm:block"><p id="current-user-name" class="text-sm font-extrabold leading-tight">User</p><p id="current-user-role" class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Employee</p></div></div>
           </div>

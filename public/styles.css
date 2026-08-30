@@ -201,6 +201,21 @@ textarea.input { line-height: 1.55; }
 .dark .loading-line { background: linear-gradient(90deg, #172238, #22304a, #172238); background-size: 200% 100%; }
 @keyframes shimmer { to { background-position: -200% 0; } }
 
+.notif-item { display: flex; align-items: flex-start; gap: 10px; padding: 10px; border-radius: 12px; transition: background .15s ease; cursor: pointer; }
+.notif-item:hover { background: rgba(241, 245, 249, 0.8); }
+.dark .notif-item:hover { background: rgba(30, 41, 59, 0.7); }
+.notif-item.unread { background: rgba(238, 242, 255, 0.7); border-left: 3px solid #6366f1; }
+.dark .notif-item.unread { background: rgba(49, 46, 129, 0.35); border-left-color: #818cf8; }
+.notif-icon { flex-shrink: 0; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 10px; font-size: 13px; font-weight: 800; }
+.notif-icon.new_meeting { background: #e0e7ff; color: #4338ca; }
+.dark .notif-icon.new_meeting { background: rgba(67, 56, 202, 0.3); color: #a5b4fc; }
+.notif-icon.meeting_request { background: #fef3c7; color: #b45309; }
+.dark .notif-icon.meeting_request { background: rgba(180, 83, 9, 0.3); color: #fde047; }
+.notif-icon.request_response { background: #d1fae5; color: #047857; }
+.dark .notif-icon.request_response { background: rgba(4, 120, 87, 0.3); color: #6ee7b7; }
+.notif-icon.absence_reason { background: #ffe4e6; color: #be123c; }
+.dark .notif-icon.absence_reason { background: rgba(190, 18, 60, 0.3); color: #fda4af; }
+
 @media (max-width: 1023px) {
   .sidebar { position: fixed; inset: 0 auto 0 0; z-index: 60; transform: translateX(-102%); box-shadow: 20px 0 45px rgba(20, 32, 61, .18); }
   .sidebar.open { transform: translateX(0); }
@@ -208,8 +223,9 @@ textarea.input { line-height: 1.55; }
   .sidebar.open::after { opacity: 1; pointer-events: auto; }
 }
 @media (max-width: 640px) {
-  .topbar { height: 76px; padding-inline: 16px; }
-  .page-wrap { padding: 22px 16px 50px; }
-  .metric-card strong { font-size: 30px; }
+  .topbar { height: 76px; padding-inline: 14px; }
+  .page-wrap { padding: 18px 14px 45px; }
+  .metric-card strong { font-size: 28px; }
   .meeting-meta { gap: 6px 10px; }
+  #notification-popover { right: -60px; width: calc(100vw - 28px); max-width: 350px; }
 }
