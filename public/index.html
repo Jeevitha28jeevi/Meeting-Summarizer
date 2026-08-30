@@ -154,11 +154,11 @@
 
       <main class="min-w-0 flex-1">
         <header class="topbar">
-          <div class="flex items-center gap-3">
-            <button id="sidebar-toggle" class="icon-button lg:hidden" aria-label="Open navigation">☰</button>
-            <div><p id="page-kicker" class="eyebrow">Workspace overview</p><h1 id="page-title" class="text-2xl font-black tracking-tight sm:text-3xl">Good morning</h1></div>
+          <div class="flex min-w-0 items-center gap-2 sm:gap-3">
+            <button id="sidebar-toggle" class="icon-button shrink-0 lg:hidden" aria-label="Open navigation">☰</button>
+            <div class="min-w-0 flex-1"><p id="page-kicker" class="eyebrow truncate">Workspace overview</p><h1 id="page-title" class="truncate text-base font-black tracking-tight sm:text-2xl">Good morning</h1></div>
           </div>
-          <div class="flex items-center gap-2 sm:gap-4">
+          <div class="flex shrink-0 items-center gap-1.5 sm:gap-3">
             <label class="search-box hidden md:flex"><span>⌕</span><input id="global-search" type="search" placeholder="Search meetings..." /></label>
             <div class="relative">
               <button id="notification-button" class="icon-button relative" title="Notifications" aria-label="Notifications">
@@ -220,8 +220,34 @@
 
           <!-- Audit -->
           <section id="page-audit" class="page-section hidden admin-only-page">
-            <div class="mb-7 flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p class="eyebrow">Traceability</p><h2 class="mt-2 text-xl font-black">Activity audit log</h2><p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Sign-ins, scheduling, attendance, ratings and automation events.</p></div><span class="soft-badge">Last 500 events</span></div>
-            <div class="panel"><div class="overflow-x-auto"><table class="data-table"><thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Entity</th><th>Details</th></tr></thead><tbody id="audit-table"></tbody></table></div></div>
+            <div class="mb-7 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+              <div>
+                <p class="eyebrow">Traceability</p>
+                <h2 class="mt-2 text-xl font-black">Activity audit log</h2>
+                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Sign-ins, scheduling, attendance, ratings and automation events.</p>
+              </div>
+              <div class="flex flex-wrap items-center gap-3">
+                <button id="clear-audit-btn" class="secondary-button !border-rose-200 !text-rose-600 hover:!bg-rose-50 dark:!border-rose-900/60 dark:!text-rose-400 dark:hover:!bg-rose-950/40">Clear all logs</button>
+                <span class="soft-badge">Last 500 events</span>
+              </div>
+            </div>
+            <div class="panel">
+              <div class="overflow-x-auto">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Time</th>
+                      <th>Actor</th>
+                      <th>Action</th>
+                      <th>Entity</th>
+                      <th>Details</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody id="audit-table"></tbody>
+                </table>
+              </div>
+            </div>
           </section>
         </div>
       </main>

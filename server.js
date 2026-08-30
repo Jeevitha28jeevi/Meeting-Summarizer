@@ -810,6 +810,27 @@ async function listAuditRaw() {
   return [...memory.auditLogs].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 500);
 }
 
+async function deleteAuditRaw(id) {
+  if (dbMode === 'mongodb-atlas') {
+    if (!mongoose.isValidObjectId(id)) return null;
+    return AuditModel.findByIdAndDelete(id);
+  }
+  const index = memory.auditLogs.findIndex((log) => idOf(log) === String(id));
+  if (index >= 0) {
+    return memory.auditLogs.splice(index, 1)[0];
+  }
+  return null;
+}
+
+async function clearAuditRaw() {
+  if (dbMode === 'mongodb-atlas') {
+    await AuditModel.deleteMany({});
+    return true;
+  }
+  memory.auditLogs = [];
+  return true;
+}
+
 async function usersMap() {
   const users = await listUsersRaw();
   return new Map(users.map((user) => [idOf(user), user]));
@@ -1560,6 +1581,25 @@ app.get('/api/audit-logs', auth, requireRole('admin'), async (req, res, next) =>
     const map = await usersMap();
     const logs = await listAuditRaw();
     res.json({ logs: logs.map((log) => auditDTO(log, map)) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete('/api/audit-logs/:id', auth, requireRole('admin'), async (req, res, next) => {
+  try {
+    const deleted = await deleteAuditRaw(req.params.id);
+    if (!deleted) return res.status(404).json({ message: 'Audit log entry not found.' });
+    res.json({ message: 'Audit log entry deleted.' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete('/api/audit-logs', auth, requireRole('admin'), async (req, res, next) => {
+  try {
+    await clearAuditRaw();
+    res.json({ message: 'All audit logs cleared.' });
   } catch (error) {
     next(error);
   }

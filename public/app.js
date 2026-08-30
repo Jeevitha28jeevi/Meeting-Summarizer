@@ -646,10 +646,54 @@ function renderAudit() {
   const body = $('#audit-table');
   if (!body || state.user?.role !== 'admin') return;
   if (!state.auditLogs.length) {
-    body.innerHTML = '<tr><td colspan="5"><div class="empty-state">No audit events yet. Actions will appear here.</div></td></tr>';
+    body.innerHTML = '<tr><td colspan="6"><div class="empty-state py-6 text-xs text-slate-400">No audit events yet. Actions will appear here.</div></td></tr>';
     return;
   }
-  body.innerHTML = state.auditLogs.map((log) => `<tr><td><span class="whitespace-nowrap text-[11px]">${escapeHtml(formatRelative(log.createdAt))}</span><small class="mt-1 block text-[10px] text-slate-400">${escapeHtml(formatDateTime(log.createdAt, 'UTC', { dateStyle: 'medium', timeStyle: 'short' }))} UTC</small></td><td>${escapeHtml(log.actor?.name || 'System')}</td><td><span class="soft-badge">${escapeHtml(log.action.replaceAll('_', ' '))}</span></td><td><span class="font-bold">${escapeHtml(log.entityType)}</span><small class="ml-1 text-[10px] text-slate-400">${escapeHtml(log.entityId.slice(0, 12))}</small></td><td><code class="max-w-[260px] truncate text-[10px] text-slate-400" title="${escapeHtml(JSON.stringify(log.metadata))}">${escapeHtml(JSON.stringify(log.metadata || {}))}</code></td></tr>`).join('');
+  body.innerHTML = state.auditLogs.map((log) => `
+    <tr>
+      <td>
+        <span class="whitespace-nowrap text-[11px] font-bold text-slate-700 dark:text-slate-200">${escapeHtml(formatRelative(log.createdAt))}</span>
+        <small class="mt-0.5 block text-[10px] text-slate-400">${escapeHtml(formatDateTime(log.createdAt, 'UTC', { dateStyle: 'medium', timeStyle: 'short' }))} UTC</small>
+      </td>
+      <td>
+        <span class="text-xs font-semibold text-slate-800 dark:text-slate-100">${escapeHtml(log.actor?.name || 'System')}</span>
+      </td>
+      <td><span class="soft-badge text-[10px]">${escapeHtml(log.action.replaceAll('_', ' '))}</span></td>
+      <td>
+        <span class="font-bold text-xs text-slate-800 dark:text-slate-200">${escapeHtml(log.entityType)}</span>
+        <small class="ml-1 text-[10px] text-slate-400">${escapeHtml(log.entityId ? log.entityId.slice(0, 12) : '')}</small>
+      </td>
+      <td><code class="max-w-[260px] truncate text-[10px] text-slate-500 dark:text-slate-400 block" title="${escapeHtml(JSON.stringify(log.metadata))}">${escapeHtml(JSON.stringify(log.metadata || {}))}</code></td>
+      <td>
+        <button data-delete-audit="${escapeHtml(log.id)}" class="rounded-lg bg-rose-50 px-2.5 py-1 text-[11px] font-bold text-rose-600 transition hover:bg-rose-100 dark:bg-rose-950/40 dark:text-rose-400 dark:hover:bg-rose-900/60">Delete</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+async function deleteAuditLog(id) {
+  if (!id) return;
+  try {
+    await api(`/api/audit-logs/${id}`, { method: 'DELETE' });
+    state.auditLogs = state.auditLogs.filter((log) => log.id !== id);
+    renderAudit();
+    showToast('Audit log deleted.', 'success');
+  } catch (error) {
+    showToast(error.message, 'error');
+  }
+}
+
+async function clearAllAuditLogs() {
+  if (!state.auditLogs.length) return showToast('No audit logs to clear.', 'info');
+  if (!window.confirm('Are you sure you want to delete all audit logs?')) return;
+  try {
+    await api('/api/audit-logs', { method: 'DELETE' });
+    state.auditLogs = [];
+    renderAudit();
+    showToast('All audit logs cleared.', 'success');
+  } catch (error) {
+    showToast(error.message, 'error');
+  }
 }
 
 async function refreshAudit() {
@@ -993,6 +1037,11 @@ function bindEvents() {
     const button = event.target.closest('[data-save-rating]');
     if (button) saveRating(button.dataset.saveRating);
   });
+  $('#audit-table')?.addEventListener('click', (event) => {
+    const deleteBtn = event.target.closest('[data-delete-audit]');
+    if (deleteBtn) deleteAuditLog(deleteBtn.dataset.deleteAudit);
+  });
+  $('#clear-audit-btn')?.addEventListener('click', clearAllAuditLogs);
 }
 
 setInterval(updateClock, 1000);
