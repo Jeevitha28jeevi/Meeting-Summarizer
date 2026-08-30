@@ -266,7 +266,7 @@ function renderNotifications() {
   };
 
   container.innerHTML = state.notifications.map((n) => `
-    <div class="notif-item ${!n.read ? 'unread' : ''}" data-notif-id="${escapeHtml(n.id)}" data-link-page="${escapeHtml(n.linkPage || 'meetings')}">
+    <div class="notif-item ${!n.read ? 'unread' : ''}" data-notif-id="${escapeHtml(n.id)}" data-link-page="${escapeHtml(n.linkPage || 'meetings')}" data-type="${escapeHtml(n.type)}" data-ref-id="${escapeHtml(n.refId || '')}">
       <div class="notif-icon ${escapeHtml(n.type)}">${icons[n.type] || '🔔'}</div>
       <div class="min-w-0 flex-1">
         <div class="flex items-center justify-between gap-1">
@@ -277,6 +277,47 @@ function renderNotifications() {
       </div>
     </div>
   `).join('');
+}
+
+function handleNotificationClick(notif) {
+  if (!notif) return;
+  markNotificationRead(notif.id);
+  showPage(notif.linkPage || 'meetings');
+  $('#notification-popover')?.classList.add('hidden');
+
+  const refId = notif.refId || '';
+  const type = notif.type || '';
+
+  setTimeout(() => {
+    let targetCard = null;
+
+    if (type === 'meeting_request') {
+      if (refId) {
+        targetCard = $(`[data-approve-request="${refId}"]`)?.closest('.meeting-card') || $(`[data-request-room="${refId}"]`)?.closest('.meeting-card');
+      }
+      if (!targetCard) {
+        targetCard = $('#pending-requests-list');
+      }
+    } else if (type === 'request_response') {
+      targetCard = $('#my-requests-list');
+    } else if (type === 'absence_reason' || type === 'new_meeting') {
+      const mId = refId.split(':')[0];
+      if (mId) {
+        targetCard = $(`[data-meeting-id="${mId}"]`)?.closest('.meeting-card');
+      }
+      if (!targetCard) {
+        targetCard = $('#meetings-list');
+      }
+    }
+
+    if (targetCard) {
+      targetCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      targetCard.classList.add('ring-4', 'ring-indigo-500', 'dark:ring-indigo-400', 'transition-all', 'duration-500');
+      setTimeout(() => {
+        targetCard.classList.remove('ring-4', 'ring-indigo-500', 'dark:ring-indigo-400');
+      }, 3000);
+    }
+  }, 120);
 }
 
 async function markNotificationRead(id) {
@@ -871,10 +912,14 @@ function bindEvents() {
     const item = event.target.closest('[data-notif-id]');
     if (!item) return;
     const id = item.dataset.notifId;
-    const linkPage = item.dataset.linkPage;
-    markNotificationRead(id);
-    if (linkPage) showPage(linkPage);
-    $('#notification-popover')?.classList.add('hidden');
+    const notif = state.notifications.find((n) => n.id === id);
+    if (notif) {
+      handleNotificationClick(notif);
+    } else {
+      markNotificationRead(id);
+      showPage(item.dataset.linkPage || 'meetings');
+      $('#notification-popover')?.classList.add('hidden');
+    }
   });
 
   $$('.nav-item').forEach((button) => button.addEventListener('click', () => showPage(button.dataset.page)));

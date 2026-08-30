@@ -670,6 +670,7 @@ async function listNotificationsForUser(currentUser) {
       title: item.title,
       message: item.message,
       linkPage: item.linkPage || 'meetings',
+      refId: item.refId || '',
       read: Boolean(item.read),
       createdAt: dateIso(item.createdAt)
     }));
@@ -683,6 +684,7 @@ async function listNotificationsForUser(currentUser) {
     title: item.title,
     message: item.message,
     linkPage: item.linkPage || 'meetings',
+    refId: item.refId || '',
     read: Boolean(item.read),
     createdAt: dateIso(item.createdAt)
   }));
