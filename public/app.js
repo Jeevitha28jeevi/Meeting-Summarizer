@@ -392,8 +392,7 @@ function renderAttendanceBars() {
   container.innerHTML = data.slice(0, 8).map((item) => {
     const rate = Number(item.attendanceRate || 0);
     const fillClass = rate >= 80 ? 'attendance-fill-high' : rate >= 50 ? 'attendance-fill-med' : 'attendance-fill-low';
-    const textClass = rate >= 80 ? 'text-emerald-600 dark:text-emerald-400 font-black' : rate >= 50 ? 'text-amber-600 dark:text-amber-400 font-black' : 'text-rose-600 dark:text-rose-400 font-black';
-    return `<div class="attendance-row"><span class="attendance-name font-bold" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</span><span class="attendance-track"><span class="attendance-fill ${fillClass}" style="width:${rate}%"></span></span><span class="attendance-value ${textClass}">${rate}%</span></div>`;
+    return `<div class="attendance-row"><span class="attendance-name font-bold" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</span><span class="attendance-track"><span class="attendance-fill ${fillClass}" style="width:${rate}%"></span></span><span class="attendance-value font-bold">${rate}%</span></div>`;
   }).join('');
 }
 

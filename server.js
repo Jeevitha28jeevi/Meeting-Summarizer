@@ -183,12 +183,21 @@ function userForParticipant(participant, usersById) {
 
 function meetingDTO(meeting, usersById) {
   const plain = typeof meeting.toObject === 'function' ? meeting.toObject() : meeting;
-  const participants = (plain.participants || []).map((participant) => ({
-    user: userForParticipant(participant, usersById),
-    status: participant.status || 'pending',
-    absenceReason: participant.absenceReason || participant.reason || '',
-    respondedAt: dateIso(participant.respondedAt)
-  }));
+  const organizerId = idOf(plain.organizer && typeof plain.organizer === 'object' ? plain.organizer : plain.organizer);
+  const participants = (plain.participants || []).map((participant) => {
+    const pUserId = getParticipantUserId(participant);
+    const isOrganizer = pUserId && pUserId === organizerId;
+    let status = participant.status || 'pending';
+    if (!isOrganizer && !participant.respondedAt && status === 'attending') {
+      status = 'pending';
+    }
+    return {
+      user: userForParticipant(participant, usersById),
+      status,
+      absenceReason: participant.absenceReason || participant.reason || '',
+      respondedAt: dateIso(participant.respondedAt)
+    };
+  });
   return {
     id: idOf(plain),
     title: plain.title,
@@ -1091,7 +1100,7 @@ app.post('/api/meetings', auth, requireRole('admin'), async (req, res, next) => 
     if (req.body.hostId || req.body.organizerId || req.body.host) {
       hostUser = await findUserById(req.body.hostId || req.body.organizerId || req.body.host);
     }
-    const organizerId = hostUser ? idOf(hostUser) : (selectedUsers.length ? idOf(selectedUsers[0]) : idOf(req.currentUser));
+    const organizerId = hostUser ? idOf(hostUser) : idOf(req.currentUser);
     if (hostUser && !selectedUsers.some((u) => idOf(u) === organizerId)) {
       selectedUsers.unshift(hostUser);
     }
