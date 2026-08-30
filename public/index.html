@@ -121,11 +121,15 @@
 
   <!-- Main application -->
   <section id="app-screen" class="hidden min-h-screen">
+    <div id="sidebar-backdrop" class="sidebar-backdrop"></div>
     <div class="app-layout">
       <aside id="sidebar" class="sidebar">
-        <div class="flex items-center gap-3 px-3">
-          <div class="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-indigo-600 text-lg font-black text-white shadow-lg shadow-indigo-600/20">M</div>
-          <div class="sidebar-brand"><p class="font-extrabold tracking-tight">Meetly</p><p class="text-[11px] text-slate-400">meeting intelligence</p></div>
+        <div class="flex items-center justify-between px-3">
+          <div class="flex items-center gap-3">
+            <div class="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-indigo-600 text-lg font-black text-white shadow-lg shadow-indigo-600/20">M</div>
+            <div class="sidebar-brand"><p class="font-extrabold tracking-tight">Meetly</p><p class="text-[11px] text-slate-400">meeting intelligence</p></div>
+          </div>
+          <button id="sidebar-close" class="icon-button lg:hidden text-lg" aria-label="Close navigation">✕</button>
         </div>
         <div class="my-8 h-px bg-slate-200 dark:bg-slate-800"></div>
         <nav class="space-y-1" aria-label="Main navigation">
@@ -175,7 +179,7 @@
               </div>
             </div>
             <button id="theme-toggle" class="icon-button" title="Toggle dark mode" aria-label="Toggle dark mode">◐</button>
-            <div class="user-mini"><div id="user-avatar" class="avatar">A</div><div class="hidden text-left sm:block"><p id="current-user-name" class="text-sm font-extrabold leading-tight">User</p><p id="current-user-role" class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Employee</p></div></div>
+            <div id="user-profile-btn" class="user-mini cursor-pointer" title="Open navigation & sign out"><div id="user-avatar" class="avatar">A</div><div class="hidden text-left sm:block"><p id="current-user-name" class="text-sm font-extrabold leading-tight">User</p><p id="current-user-role" class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Employee</p></div></div>
           </div>
         </header>
 

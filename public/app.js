@@ -904,9 +904,24 @@ function bindEvents() {
     button.textContent = input.type === 'password' ? '◉' : '○';
   }));
 
+  const toggleSidebar = (open) => {
+    const sidebar = $('#sidebar');
+    const backdrop = $('#sidebar-backdrop');
+    const shouldOpen = open !== undefined ? open : !sidebar?.classList.contains('open');
+    if (sidebar) sidebar.classList.toggle('open', shouldOpen);
+    if (backdrop) backdrop.classList.toggle('open', shouldOpen);
+  };
+
   ['#theme-toggle', '#auth-theme-toggle'].forEach((selector) => $(selector)?.addEventListener('click', () => setTheme(!document.documentElement.classList.contains('dark'))));
-  $('#logout-button').addEventListener('click', () => { state.token = ''; state.user = null; localStorage.removeItem('meetly_token'); showAuth(); showToast('You have been signed out.'); });
-  $('#sidebar-toggle').addEventListener('click', () => $('#sidebar').classList.toggle('open'));
+  $('#logout-button').addEventListener('click', () => { toggleSidebar(false); state.token = ''; state.user = null; localStorage.removeItem('meetly_token'); showAuth(); showToast('You have been signed out.'); });
+
+  $('#sidebar-toggle')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleSidebar();
+  });
+  $('#sidebar-close')?.addEventListener('click', () => toggleSidebar(false));
+  $('#sidebar-backdrop')?.addEventListener('click', () => toggleSidebar(false));
+  $('#user-profile-btn')?.addEventListener('click', () => toggleSidebar(true));
 
   $('#notification-button')?.addEventListener('click', (event) => {
     event.stopPropagation();
@@ -932,26 +947,13 @@ function bindEvents() {
     }
   });
 
-  $('#sidebar-toggle').addEventListener('click', (e) => {
-    e.stopPropagation();
-    $('#sidebar').classList.toggle('open');
-  });
-
-  document.addEventListener('click', (event) => {
-    if (window.innerWidth < 1024) {
-      if (!event.target.closest('#sidebar') && !event.target.closest('#sidebar-toggle')) {
-        $('#sidebar')?.classList.remove('open');
-      }
-    }
-  });
-
   $$('.nav-item').forEach((button) => button.addEventListener('click', () => {
     showPage(button.dataset.page);
-    $('#sidebar')?.classList.remove('open');
+    toggleSidebar(false);
   }));
   $$('[data-page-jump]').forEach((button) => button.addEventListener('click', () => {
     showPage(button.dataset.pageJump);
-    $('#sidebar')?.classList.remove('open');
+    toggleSidebar(false);
   }));
 
   $('#global-search').addEventListener('input', (event) => { $('#meeting-search').value = event.target.value; if (event.target.value) showPage('meetings'); renderMeetings(); });

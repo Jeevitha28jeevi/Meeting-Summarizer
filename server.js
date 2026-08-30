@@ -1015,6 +1015,10 @@ app.post('/api/auth/login', async (req, res, next) => {
   }
 });
 
+app.get('/api/auth/me', auth, (req, res) => {
+  res.json({ user: safeUser(req.currentUser) });
+});
+
 // Notifications API
 
 app.get('/api/notifications', auth, async (req, res, next) => {
